@@ -1,0 +1,1533 @@
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/AskForHelp.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/AskForHelp.java	(date 1536586648000)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/AskForHelp.java	(date 1537105512086)
+@@ -3,7 +3,6 @@
+ import android.content.Intent;
+ import android.support.v7.app.AppCompatActivity;
+ import android.os.Bundle;
+-import android.util.Log;
+ import android.view.View;
+ import android.widget.Button;
+ import android.widget.Toast;
+@@ -16,74 +15,25 @@
+ public class AskForHelp extends AppCompatActivity {
+ 
+     private Button startChat;
+-    private FirebaseAuth mFirebaseAuth;
+-    private FirebaseUser mFirebaseUser;
+-    private String mUsername;
+-    private String mPhotoUrl;
+-
+-    private static final int REQUEST_SIGN_IN = 123;
++    private Button startTrack;
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
+         setContentView(R.layout.activity_ask_for_help);
+ 
+-        startChat = (Button)findViewById(R.id.start_chat);
+-
+-        // 初始化 Firebase Auth
+-        mFirebaseAuth = FirebaseAuth.getInstance();
+-        mFirebaseUser = mFirebaseAuth.getCurrentUser();
++        startChat = findViewById(R.id.start_chat);
++        startTrack = findViewById(R.id.start_track);
+ 
+-        // 未登录时
+-        if(mFirebaseUser == null) {
+-            // Start sign in/sign up activity
+-            startActivityForResult(
+-                    AuthUI.getInstance()
+-                            .createSignInIntentBuilder()
+-                            .build(),
+-                    REQUEST_SIGN_IN
+-            );
+-        } else {
+-            // 登录时
+-            // User is already signed in. Therefore, display a welcome Toast
+-            mUsername = mFirebaseUser.getDisplayName();
+-            Toast.makeText(this,
+-                    "Welcome " + mUsername,
+-                    Toast.LENGTH_LONG)
+-                    .show();
+-            if (mFirebaseUser.getPhotoUrl() != null) {
+-                mPhotoUrl = mFirebaseUser.getPhotoUrl().toString();
+-            }
+-        }
++        startChat.setOnClickListener(v -> {
++            Intent startChatIntent = new Intent(getApplicationContext(), ChatActivity.class);
++            startActivity(startChatIntent);
++        });
+ 
+-        startChat.setOnClickListener(new View.OnClickListener() {
+-            @Override
+-            public void onClick(View v) {
+-                Intent startIntent = new Intent(getApplicationContext(), ChatActivity.class);
+-                startActivity(startIntent);
+-            }
++        startTrack.setOnClickListener(v -> {
++            Intent intent = new Intent(getApplicationContext(), TrackingByGPS.class);
++            startActivity(intent);
+         });
+-    }
+ 
+-    @Override
+-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+-        super.onActivityResult(requestCode, resultCode, data);
+-        if(resultCode == RESULT_OK){
+-            switch (requestCode){
+-                case REQUEST_SIGN_IN:
+-                    Toast.makeText(this,
+-                            "Successfully signed in. Welcome!",
+-                            Toast.LENGTH_LONG)
+-                            .show();
+-            }
+-        }else{
+-            Toast.makeText(this,
+-                    "Cannot Sign in",
+-                    Toast.LENGTH_LONG)
+-                    .show();
+-
+-            // close app
+-            finish();
+-        }
+     }
+ }
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/ChatActivity.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/ChatActivity.java	(date 1536586648000)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/ChatActivity.java	(date 1537239105463)
+@@ -15,13 +15,11 @@
+  */
+ package com.example.vulpix.maphelper.controller.activity;
+ 
+-import android.Manifest;
+ import android.content.Intent;
+ import android.content.SharedPreferences;
+ import android.net.Uri;
+ import android.os.Bundle;
+ import android.preference.PreferenceManager;
+-import android.support.annotation.NonNull;
+ import android.support.v4.content.ContextCompat;
+ import android.support.v7.app.AppCompatActivity;
+ import android.support.v7.widget.LinearLayoutManager;
+@@ -31,9 +29,6 @@
+ import android.text.TextWatcher;
+ import android.util.Log;
+ import android.view.LayoutInflater;
+-import android.view.Menu;
+-import android.view.MenuInflater;
+-import android.view.MenuItem;
+ import android.view.View;
+ import android.view.ViewGroup;
+ import android.widget.Button;
+@@ -41,12 +36,9 @@
+ import android.widget.ImageView;
+ import android.widget.ProgressBar;
+ import android.widget.TextView;
+-import android.widget.Toast;
+ 
+ import com.bumptech.glide.Glide;
+ import com.example.vulpix.maphelper.R;
+-import com.example.vulpix.maphelper.controller.activity.ChatMessage;
+-import com.example.vulpix.maphelper.controller.activity.NavActivity;
+ import com.facebook.drawee.backends.pipeline.Fresco;
+ import com.facebook.drawee.backends.pipeline.PipelineDraweeController;
+ import com.facebook.drawee.generic.GenericDraweeHierarchy;
+@@ -58,57 +50,30 @@
+ import com.firebase.ui.database.FirebaseRecyclerAdapter;
+ import com.firebase.ui.database.FirebaseRecyclerOptions;
+ import com.firebase.ui.database.SnapshotParser;
+-import com.google.android.gms.tasks.OnCompleteListener;
+-import com.google.android.gms.tasks.OnFailureListener;
+-import com.google.android.gms.tasks.OnSuccessListener;
+-import com.google.android.gms.tasks.Task;
+-import com.google.firebase.analytics.FirebaseAnalytics;
+ import com.google.firebase.auth.FirebaseAuth;
+ import com.google.firebase.auth.FirebaseUser;
+-import com.google.firebase.database.DataSnapshot;
+-import com.google.firebase.database.DatabaseError;
+ import com.google.firebase.database.DatabaseReference;
+ import com.google.firebase.database.FirebaseDatabase;
+-import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
+-import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
+-import com.google.firebase.appindexing.Action;
+-import com.google.firebase.appindexing.FirebaseAppIndex;
+-import com.google.firebase.appindexing.FirebaseUserActions;
+-import com.google.firebase.appindexing.Indexable;
+-import com.google.firebase.appindexing.builders.Indexables;
+-import com.google.firebase.appindexing.builders.PersonBuilder;
+-import com.google.firebase.storage.FirebaseStorage;
+-import com.google.firebase.storage.StorageReference;
+-import com.google.firebase.storage.UploadTask;
+-import com.firebase.ui.auth.AuthUI;
+-
+-import java.io.File;
+-import java.io.FileInputStream;
+-import java.io.FileNotFoundException;
+-import java.io.InputStream;
+-import java.util.HashMap;
+-import java.util.Map;
++import java.text.DateFormat;
++import java.util.Date;
+ 
+ import de.hdodenhof.circleimageview.CircleImageView;
+ 
+ public class ChatActivity extends AppCompatActivity {
+ 
+-    // Firebase instance variables
+-    private FirebaseAuth mFirebaseAuth;
+-    private FirebaseUser mFirebaseUser;
+-    private DatabaseReference mFirebaseDatabaseReference;
+-    private FirebaseRecyclerAdapter<ChatMessage, MessageViewHolder> mFirebaseAdapter;
+-
+     // item-message 初始化显示
+     public class MessageViewHolder extends RecyclerView.ViewHolder {
+         TextView messageTextView;
+         SimpleDraweeView messageImageView;
+         TextView messengerTextView;
+         CircleImageView messengerImageView;
++        Button trackMessenger;
+ 
+         public MessageViewHolder(View v) {
+             super(v);
++            // message text
+             messageTextView = itemView.findViewById(R.id.messageTextView);
++            // message image
+             messageImageView = itemView.findViewById(R.id.messageImageView);
+             GenericDraweeHierarchyBuilder builder =
+                     new GenericDraweeHierarchyBuilder(ChatActivity.this.getResources());
+@@ -120,28 +85,45 @@
+                             .setRoundingMethod(RoundingParams.RoundingMethod.BITMAP_ONLY))
+                     .build();
+             messageImageView.setHierarchy(hierarchy);
++            // messenger photo
+             messengerTextView = itemView.findViewById(R.id.messengerTextView);
++            // messenger name
+             messengerImageView = itemView.findViewById(R.id.messengerImageView);
++            // track messenger
++            trackMessenger = itemView.findViewById(R.id.trackMessenger);
+         }
+     }
+ 
+-    // 其他variable
+     private static final String TAG = "ChatActivity";
+-    public static final String MESSAGES_CHILD = "messages";
++
+     private static final int REQUEST_LOCATION = 4;
+     public static final int DEFAULT_MSG_LENGTH_LIMIT = 10;
+-    private static final String MESSAGE_SENT_EVENT = "message_sent";
+-    private String mUsername;
++
+     private String mPhotoUrl;
+-    private SharedPreferences mSharedPreferences;
+ 
+     private Button mSendButton;
+-    private Button mSendDestination;
+     private RecyclerView mMessageRecyclerView;
+     private LinearLayoutManager mLinearLayoutManager;
+     private ProgressBar mProgressBar;
+     private EditText mMessageEditText;
+ 
++    // Firebase AUTH variables
++    private FirebaseUser mFirebaseUser = FirebaseAuth.getInstance().getCurrentUser();
++    private String myName = mFirebaseUser.getDisplayName();
++
++    // Firebase message reference variables
++    public static final String MESSAGES_CHILD = "messages";
++    //todo: TEST
++    public static final String CHAT_CHILD = "chats";
++    //todo: pass the chat member values here
++    public static final String participant = "examplename";
++    private DatabaseReference messagesRef = FirebaseDatabase.getInstance().getReference().child(MESSAGES_CHILD);
++    //todo: TEST
++    private DatabaseReference chatRef = FirebaseDatabase.getInstance().getReference().child(CHAT_CHILD);
++
++
++    // Firebase adapter
++    private FirebaseRecyclerAdapter<ChatMessage, MessageViewHolder> mFirebaseAdapter;
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+@@ -149,19 +131,14 @@
+         // load 界面
+         super.onCreate(savedInstanceState);
+         setContentView(R.layout.activity_chat);
+-        mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+-
+-        // 初始化 Firebase Auth
+-        mFirebaseAuth = FirebaseAuth.getInstance();
+-        mFirebaseUser = mFirebaseAuth.getCurrentUser();
+-        mUsername = mFirebaseUser.getDisplayName();
++        SharedPreferences mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+ 
+         //初始化 fresco 用来加载图片
+         Fresco.initialize(this);
+ 
+         // Initialize ProgressBar and RecyclerView.
+-        mProgressBar = (ProgressBar) findViewById(R.id.progressBar);
+-        mMessageRecyclerView = (RecyclerView) findViewById(R.id.messageRecyclerView);
++        mProgressBar = findViewById(R.id.progressBar);
++        mMessageRecyclerView = findViewById(R.id.messageRecyclerView);
+         mLinearLayoutManager = new LinearLayoutManager(this);
+         mLinearLayoutManager.setStackFromEnd(true);
+         mMessageRecyclerView.setLayoutManager(mLinearLayoutManager);
+@@ -170,23 +147,19 @@
+         // --------- read message 开始 ----------- //
+         // New child entries
+         // initialize parser
+-        mFirebaseDatabaseReference = FirebaseDatabase.getInstance().getReference();
+-        SnapshotParser<ChatMessage> parser = new SnapshotParser<ChatMessage>() {
+-            @Override
+-            public ChatMessage parseSnapshot(DataSnapshot dataSnapshot) {
+-                ChatMessage friendlyMessage = dataSnapshot.getValue(ChatMessage.class);
+-                if (friendlyMessage != null) {
+-                    friendlyMessage.setId(dataSnapshot.getKey());
+-                }
+-                return friendlyMessage;
++
++        SnapshotParser<ChatMessage> parser = dataSnapshot -> {
++            ChatMessage msg = dataSnapshot.getValue(ChatMessage.class);
++            if (msg != null) {
++                msg.setId(dataSnapshot.getKey());
+             }
++            return msg;
+         };
+ 
+-        // get reference "message"
+-        DatabaseReference messagesRef = mFirebaseDatabaseReference.child(MESSAGES_CHILD);
++        // built message recycler list
+         FirebaseRecyclerOptions<ChatMessage> options =
+                 new FirebaseRecyclerOptions.Builder<ChatMessage>()
+-                        .setQuery(messagesRef, parser)
++                        .setQuery(messagesRef.orderByChild("users/" + participant).equalTo(true), parser)
+                         .build();
+         // 设置adapter
+         mFirebaseAdapter = new FirebaseRecyclerAdapter<ChatMessage, MessageViewHolder>(options) {
+@@ -199,18 +172,19 @@
+             @Override
+             protected void onBindViewHolder(final MessageViewHolder viewHolder,
+                                             int position,
+-                                            ChatMessage friendlyMessage) {
++                                            ChatMessage msg) {
+                 mProgressBar.setVisibility(ProgressBar.INVISIBLE);
+                 // if text不为空 读取text
+-                if (friendlyMessage.getText() != null) {
+-                    viewHolder.messageTextView.setText(friendlyMessage.getText());
++                if (msg.getText() != null) {
++                    viewHolder.messageTextView.setText(msg.getText());
+                     viewHolder.messageTextView.setVisibility(TextView.VISIBLE);
+                     viewHolder.messageImageView.setVisibility(ImageView.GONE);
++                    viewHolder.trackMessenger.setVisibility(Button.GONE);
+                 }
+                 // if image不为空 读取image
+-                if (friendlyMessage.getImageUrl() != null) {
++                if (msg.getImageUrl() != null) {
+ 
+-                    String imageUrl = friendlyMessage.getImageUrl();
++                    String imageUrl = msg.getImageUrl();
+                     ImageRequest request = ImageRequestBuilder
+                             .newBuilderWithSource(Uri.parse(imageUrl))
+                             .build();
+@@ -220,45 +194,36 @@
+                             .setImageRequest(request)
+                             .build();
+                     viewHolder.messageImageView.setController(controller);
+-                    // 下载image
+-//                    if (imageUrl.startsWith("http://")) {
+-//                        StorageReference storageReference = FirebaseStorage.getInstance()
+-//                                .getReferenceFromUrl(imageUrl);
+-//                        storageReference.getDownloadUrl().addOnCompleteListener(
+-//                                new OnCompleteListener<Uri>() {
+-//                                    @Override
+-//                                    public void onComplete(@NonNull Task<Uri> task) {
+-//                                        if (task.isSuccessful()) {
+-//                                            String downloadUrl = task.getResult().toString();
+-//                                            Glide.with(viewHolder.messageImageView.getContext())
+-//                                                    .load(downloadUrl)
+-//                                                    .into(viewHolder.messageImageView);
+-//                                        } else {
+-//                                            Log.w(TAG, "Getting download url was not successful.",
+-//                                                    task.getException());
+-//                                        }
+-//                                    }
+-//                                });
+-//                    } else {
+-//                        Glide.with(viewHolder.messageImageView.getContext())
+-//                                .load(friendlyMessage.getImageUrl())
+-//                                .into(viewHolder.messageImageView);
+-//                    }
+                     viewHolder.messageImageView.setVisibility(ImageView.VISIBLE);
+                     viewHolder.messageTextView.setVisibility(TextView.VISIBLE);
++                    viewHolder.trackMessenger.setVisibility(Button.VISIBLE);
+                 }
+ 
+-                // 加载头像
+-                viewHolder.messengerTextView.setText(friendlyMessage.getName());
+-                if (friendlyMessage.getPhotoUrl() == null) {
++                // load messenger name and photo
++                viewHolder.messengerTextView.setText(msg.getName());
++                if (msg.getPhotoUrl() == null) {
+                     viewHolder.messengerImageView.setImageDrawable(ContextCompat.getDrawable(ChatActivity.this,
+                             R.drawable.ic_account_circle_black_36dp));
+                 } else {
+                     Glide.with(ChatActivity.this)
+-                            .load(friendlyMessage.getPhotoUrl())
++                            .load(msg.getPhotoUrl())
+                             .into(viewHolder.messengerImageView);
+                 }
+ 
++                // track messenger
++                viewHolder.trackMessenger.setOnClickListener(new View.OnClickListener(){
++                    @Override
++                    public void onClick(View v){
++                        Intent intent = new Intent(getApplicationContext(), TrackActivity.class);
++
++                        // TODO: add correct extra value here
++                        // TODO: if the mUsername has no Location Child, need to declare null assertion
++                        intent.putExtra("mUsername","testname");
++                        intent.putExtra("destination", "Melbourne Central");
++
++                        startActivity(intent);
++                    }
++                });
+             }
+         };
+ 
+@@ -267,14 +232,14 @@
+             @Override
+             public void onItemRangeInserted(int positionStart, int itemCount) {
+                 super.onItemRangeInserted(positionStart, itemCount);
+-                int friendlyMessageCount = mFirebaseAdapter.getItemCount();
++                int msgCount = mFirebaseAdapter.getItemCount();
+                 int lastVisiblePosition =
+                         mLinearLayoutManager.findLastCompletelyVisibleItemPosition();
+                 // If the recycler view is initially being loaded or the
+                 // user is at the bottom of the list, scroll to the bottom
+                 // of the list to show the newly added message.
+                 if (lastVisiblePosition == -1 ||
+-                        (positionStart >= (friendlyMessageCount - 1) &&
++                        (positionStart >= (msgCount - 1) &&
+                                 lastVisiblePosition == (positionStart - 1))) {
+                     mMessageRecyclerView.scrollToPosition(positionStart);
+                 }
+@@ -284,7 +249,7 @@
+         // ------ read message 结束 --------- //
+ 
+         // input message typing
+-        mMessageEditText = (EditText) findViewById(R.id.messageEditText);
++        mMessageEditText = findViewById(R.id.messageEditText);
+         mMessageEditText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(mSharedPreferences
+                 .getInt("normal_length", DEFAULT_MSG_LENGTH_LIMIT))});
+         mMessageEditText.addTextChangedListener(new TextWatcher() {
+@@ -307,29 +272,41 @@
+         });
+ 
+         // ----------- send message 开始 -----------------//
+-        mSendButton = (Button) findViewById(R.id.sendButton);
+-        mSendButton.setOnClickListener(new View.OnClickListener() {
+-            @Override
+-            public void onClick(View view) {
+-                ChatMessage friendlyMessage = new
+-                        ChatMessage(mMessageEditText.getText().toString(),
+-                        mUsername,
+-                        mPhotoUrl,
+-                        null /* no image */);
+-                mFirebaseDatabaseReference.child(MESSAGES_CHILD)
+-                        .push().setValue(friendlyMessage);
+-                mMessageEditText.setText("");
+-            }
++        mSendButton = findViewById(R.id.sendButton);
++        mSendButton.setOnClickListener(view -> {
++            // new chat message
++            ChatMessage msg = new ChatMessage(
++                    mMessageEditText.getText().toString(),
++                    myName,
++                    mPhotoUrl,
++                    null);
++
++            // upload message to firebase
++            String messageKey = messagesRef.push().getKey();
++            messagesRef.child(messageKey).setValue(msg);
++            messagesRef.child(messageKey).child("users").child(myName).setValue(true);
++            messagesRef.child(messageKey).child("users").child(participant).setValue(true);
++
++            //todo: test for recent chat
++            // new chat select item
++            DateFormat df = DateFormat.getDateTimeInstance();
++            Date date = new Date();
++            ChatSelectItem chat = new ChatSelectItem(
++                    participant,
++                    mMessageEditText.getText().toString(),
++                    df.format(date));
++            // upload to firebase
++            String chatKey = chatRef.child(myName).push().getKey();
++            chatRef.child(myName).child(chatKey).setValue(chat);
++
++            // empty the text field
++            mMessageEditText.setText("");
+         });
+ 
+-        mSendDestination = findViewById(R.id.sendDestination);
+-        mSendDestination.setOnClickListener(new View.OnClickListener() {
+-            @Override
+-            public void onClick(View view) {
+-                startActivityForResult(new Intent(ChatActivity.this, NavActivity.class),
+-                        REQUEST_LOCATION);
+-            }
+-        });
++        Button mSendDestination = findViewById(R.id.sendDestination);
++        mSendDestination.setOnClickListener(view -> startActivityForResult(
++                new Intent(ChatActivity.this, NavActivity.class),
++                REQUEST_LOCATION));
+         // --------------- send message 结束 ------------//
+     }
+ 
+@@ -343,8 +320,6 @@
+                 if (data != null) {
+                     Double longitude = data.getDoubleExtra("longitude", 0);
+                     Double latitude = data.getDoubleExtra("latitude", 0);
+-//                    String street = data.getStringExtra("street");
+-//                    String place = data.getStringExtra("place");
+ 
+                     String text = "Address : " + longitude + ", " + latitude;
+                     String accessToken = getString(R.string.access_token);
+@@ -353,13 +328,14 @@
+                             longitude + "," + latitude + ")/" +
+                             longitude + "," + latitude + ",14.25,0,60/600x600?access_token=" +
+                             accessToken;
+-                    ChatMessage message = new
+-                            ChatMessage(text,
+-                            mUsername,
+-                            mPhotoUrl,
+-                            imageUrl);
+-                    mFirebaseDatabaseReference.child(MESSAGES_CHILD)
+-                            .push().setValue(message);
++
++                    ChatMessage msg = new ChatMessage(text, myName, mPhotoUrl, imageUrl);
++
++                    // upload message to firebase
++                    String key = messagesRef.push().getKey();
++                    messagesRef.child(key).setValue(msg);
++                    messagesRef.child(key).child("users").child(myName).setValue(true);
++                    messagesRef.child(key).child("users").child(participant).setValue(true);
+                 }
+             }
+         }
+@@ -370,6 +346,7 @@
+         super.onStart();
+     }
+ 
++
+     @Override
+     public void onPause() {
+         mFirebaseAdapter.stopListening();
+@@ -386,34 +363,6 @@
+     public void onDestroy() {
+         super.onDestroy();
+     }
+-
+-    @Override
+-    public boolean onCreateOptionsMenu(Menu menu) {
+-        MenuInflater inflater = getMenuInflater();
+-        inflater.inflate(R.menu.main_menu, menu);
+-        return true;
+-    }
+-
+-    @Override
+-    public boolean onOptionsItemSelected(MenuItem item) {
+-        switch (item.getItemId()) {
+-            case R.id.sign_out_menu:
+-                AuthUI.getInstance().signOut(this)
+-                        .addOnCompleteListener(new OnCompleteListener<Void>() {
+-                            @Override
+-                            public void onComplete(@NonNull Task<Void> task) {
+-                                Toast.makeText(ChatActivity.this,
+-                                        "You have been signed out.",
+-                                        Toast.LENGTH_LONG)
+-                                        .show();
+-                                // Close activity
+-                                finish();
+-                            }
+-                        });
+-            default:
+-                return super.onOptionsItemSelected(item);
+-        }
+-    }
+ }
+ 
+ 
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/ChatMessage.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/ChatMessage.java	(date 1536586648000)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/ChatMessage.java	(date 1537196421133)
+@@ -15,7 +15,9 @@
+  */
+ package com.example.vulpix.maphelper.controller.activity;
+ 
++import java.util.ArrayList;
+ import java.util.Date;
++import java.util.List;
+ 
+ public class ChatMessage {
+ 
+@@ -84,5 +86,6 @@
+     public void setMessageTime(long messageTime) {
+         this.messageTime = messageTime;
+     }
++
+ }
+ 
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/enterDest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/enterDest.java	(date 1536586648000)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/enterDest.java	(date 1537102465124)
+@@ -25,7 +25,7 @@
+         super.onCreate(savedInstanceState);
+         setContentView(R.layout.activity_enter_dest);
+ 
+-        Button search = (Button) findViewById(R.id.search);
++        Button search = findViewById(R.id.search);
+         placeEditText = findViewById(R.id.searchDest);
+ 
+         search.setOnClickListener(new View.OnClickListener() {
+@@ -42,7 +42,6 @@
+                 startActivityForResult(startIntent, RESULT_OK);
+             }
+         });
+-
+     }
+ 
+ 
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/MainActivity.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/MainActivity.java	(date 1536586648000)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/MainActivity.java	(date 1537199567970)
+@@ -1,59 +1,159 @@
+ package com.example.vulpix.maphelper.controller.activity;
+ 
+-import android.support.v7.app.AppCompatActivity;
++import android.graphics.drawable.Drawable;
++import android.support.v4.app.FragmentTabHost;
+ import android.os.Bundle;
+ 
+ import com.example.vulpix.maphelper.R;
+-import com.example.vulpix.maphelper.model.Model;
++import com.example.vulpix.maphelper.fragment.MainFragment;
++import com.example.vulpix.maphelper.fragment.MessageFragment;
++import com.firebase.ui.auth.AuthUI;
++import com.google.firebase.auth.FirebaseAuth;
++import com.google.firebase.auth.FirebaseUser;
++import com.google.firebase.database.DatabaseReference;
++import com.google.firebase.database.FirebaseDatabase;
+ 
+-import android.text.TextUtils;
+-import android.widget.Button;
++import android.support.v7.app.AppCompatActivity;
++import android.view.Menu;
++import android.view.MenuInflater;
++import android.view.MenuItem;
++import android.view.View;
+ import android.content.Intent;
+-import android.view.View;
+-import android.widget.EditText;
++import android.widget.LinearLayout;
++import android.widget.TabHost;
++import android.widget.TextView;
+ import android.widget.Toast;
+ 
+ public class MainActivity extends AppCompatActivity {
+ 
+-    private EditText enterName;
+-    private EditText pasw;
+-    private Button helpYourself;
+-    private Button askForHelp;
++    //TODO: no sure it's necessary
++    private User user;
++
++    // Fragment - main menu
++    private static final String TAG = "MainActivity";
++    private Bundle mBundle = new Bundle();
++    private FragmentTabHost mTabHost;
+ 
++    // Initialize Firebase Auth
++    private FirebaseAuth mFirebaseAuth = FirebaseAuth.getInstance();
++    private FirebaseUser mFirebaseUser = mFirebaseAuth.getCurrentUser();
++    private DatabaseReference mFirebaseDatabaseReference;
++
++    private static final int REQUEST_SIGN_IN = 123;
++    public static final String USER_CHILD = "user";
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
+-        setContentView(R.layout.activity_main);
++        setContentView(R.layout.fragment_main_menu);
++
++        // load fragment tabber
++        loadFragments();
+ 
+-        //initial frame
+-        helpYourself = (Button)findViewById(R.id.help_yourself);
+-        askForHelp = (Button)findViewById(R.id.ask_for_help);
++        // login to Firebase by firebaseAUTH
++        loginFirebase();
++    }
+ 
+-        // listen the helpYourSelf and askForHelp event
+-        initListener();
++    protected void loginFirebase(){
+ 
++        // User hasn't sign in
++        if(mFirebaseUser == null) {
++            // Start sign in/sign up activity
++            startActivityForResult(AuthUI
++                            .getInstance()
++                            .createSignInIntentBuilder()
++                            .build(),
++                    REQUEST_SIGN_IN
++            );
++        } else {
++            // User is already signed in. Therefore, display a welcome Toast
++            String mUsername = mFirebaseUser.getDisplayName();
++            Toast.makeText(this,
++                    "Welcome " + mUsername,
++                    Toast.LENGTH_LONG)
++                    .show();
++            if (mFirebaseUser.getPhotoUrl() != null) {
++                String mPhotoUrl = mFirebaseUser.getPhotoUrl().toString();
++            }
++        }
+     }
+ 
+-    private void initListener(){
++    private void loadFragments(){
+ 
+-        // handle event for "helpYourSelf"
+-        helpYourself.setOnClickListener(new View.OnClickListener() {
+-            @Override
+-            public void onClick(View v) {
+-                Intent startIntent = new Intent(getApplicationContext(), enterDest.class);
+-                startActivity(startIntent);
++        mBundle.putString("tag", TAG);
++        mTabHost = findViewById(android.R.id.tabhost);
++        mTabHost.setup(this, getSupportFragmentManager(), R.id.realtabcontent);
++
++        //addTab(标题，跳转的Fragment，传递参数的Bundle)
++        mTabHost.addTab(getTabView(R.string.menu_main, R.drawable.tabbar_main), MainFragment.class, mBundle);
++        mTabHost.addTab(getTabView(R.string.menu_message, R.drawable.tabbar_messages), MessageFragment.class, mBundle);
++        mTabHost.addTab(getTabView(R.string.menu_contacts, R.drawable.tabbar_contacts), ThirdFragment.class, mBundle);
++        mTabHost.addTab(getTabView(R.string.menu_account, R.drawable.tabbar_account), ThirdFragment.class, mBundle);
++
++        //设置tabs之间的分隔线不显示
++        mTabHost.getTabWidget().setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
++    }
++
++    private TabHost.TabSpec getTabView(int textId, int imgId) {
++        String text = getResources().getString(textId);
++        Drawable drawable = getResources().getDrawable(imgId);
++
++        //必须设置图片大小，否则不显示
++        drawable.setBounds(0, 0, drawable.getMinimumWidth(), drawable.getMinimumHeight());
++        View item_tab = getLayoutInflater().inflate(R.layout.item_tab, null);
++        TextView tv_item = item_tab.findViewById(R.id.tv_item);
++        tv_item.setText(text);
++        tv_item.setCompoundDrawables(null, drawable, null, null);
++        TabHost.TabSpec spec = mTabHost.newTabSpec(text).setIndicator(item_tab);
++        return spec;
++    }
++
++    @Override
++    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
++        super.onActivityResult(requestCode, resultCode, data);
++        if(resultCode == RESULT_OK){
++            switch (requestCode){
++                case REQUEST_SIGN_IN:
++                    Toast.makeText(this,
++                            "Successfully signed in. Welcome!",
++                            Toast.LENGTH_LONG)
++                            .show();
+             }
+-        });
++        }else{
++            Toast.makeText(this,
++                    "Cannot Sign in",
++                    Toast.LENGTH_LONG)
++                    .show();
+ 
+-        //handle event for "AskForHelp"
+-        askForHelp.setOnClickListener(new View.OnClickListener() {
+-            @Override
+-            public void onClick(View v) {
+-                Intent startIntent = new Intent(getApplicationContext(), AskForHelp.class);
+-                startActivity(startIntent);
+-            }
+-        });
++            // close app
++            finish();
++        }
++    }
++
++    // load main menu
++    @Override
++    public boolean onCreateOptionsMenu(Menu menu) {
++        MenuInflater inflater = getMenuInflater();
++        inflater.inflate(R.menu.top_menu, menu);
++        return true;
++    }
++
++    // sign out activity
++    @Override
++    public boolean onOptionsItemSelected(MenuItem item) {
++        switch (item.getItemId()) {
++            case R.id.sign_out_menu:
++                AuthUI.getInstance().signOut(this)
++                        .addOnCompleteListener(task -> {
++                            Toast.makeText(MainActivity.this,
++                                    "You have been signed out.",
++                                    Toast.LENGTH_LONG)
++                                    .show();
++//                            // Close activity
++//                            finish();
++                        });
++            default:
++                return super.onOptionsItemSelected(item);
++        }
+     }
+-
+ }
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/NavActivity.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/NavActivity.java	(date 1536586648000)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/NavActivity.java	(date 1537096916105)
+@@ -82,6 +82,7 @@
+     private static final String TAG = "DirectionsActivity";
+     private NavigationMapRoute navigationMapRoute;
+ 
++    // local layout variable
+     private Button button;
+     private MenuItem searchMenu;
+     private SearchView searchView;
+@@ -92,12 +93,14 @@
+         Mapbox.getInstance(this, getString(R.string.access_token));
+         setContentView(R.layout.activity_nav);
+ 
+-        getSupportActionBar().setTitle("Send Location");
++        // menu bar
++        getSupportActionBar().setTitle("Send UserLocation");
+         getSupportActionBar().setDisplayShowHomeEnabled(false);
+         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+         getSupportActionBar().setDisplayShowTitleEnabled(true);
+         getSupportActionBar().setDisplayShowCustomEnabled(false);
+ 
++        // load map
+         mapView = findViewById(R.id.mapView);
+         button = findViewById(R.id.startButton);
+         mapView.getMapAsync(mapboxMap -> {
+@@ -339,5 +342,4 @@
+         }
+         return super.onOptionsItemSelected(item);
+     }
+-
+ }
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/SelfNavActivity.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/SelfNavActivity.java	(date 1536586648000)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/SelfNavActivity.java	(date 1537245689060)
+@@ -10,7 +10,6 @@
+ import com.mapbox.api.geocoding.v5.MapboxGeocoding;
+ import com.mapbox.api.geocoding.v5.models.CarmenFeature;
+ import com.mapbox.api.geocoding.v5.models.GeocodingResponse;
+-import com.mapbox.core.utils.TextUtils;
+ import com.mapbox.mapboxsdk.Mapbox;
+ import com.mapbox.mapboxsdk.camera.CameraPosition;
+ import com.mapbox.mapboxsdk.maps.MapView;
+@@ -38,7 +37,6 @@
+ import com.mapbox.android.core.permissions.PermissionsManager;
+ 
+ // classes needed to add a marker
+-import com.mapbox.mapboxsdk.annotations.Marker;
+ import com.mapbox.mapboxsdk.annotations.MarkerOptions;
+ 
+ // classes to calculate a route
+@@ -72,7 +70,6 @@
+     private Location originLocation;
+ 
+     // variables for adding a marker
+-    private Marker destinationMarker;
+     private LatLng originCoord;
+     private LatLng destinationCoord;
+ 
+@@ -83,7 +80,7 @@
+     private static final String TAG = "DirectionsActivity";
+     private NavigationMapRoute navigationMapRoute;
+ 
+-    private Button button, back;
++    private Button button, back, sendSafeMsg;
+     private String place;
+     private TextView placeView;
+     private TextView coordView;
+@@ -93,8 +90,12 @@
+         super.onCreate(savedInstanceState);
+         Mapbox.getInstance(this, getString(R.string.access_token));
+         setContentView(R.layout.activity_self_nav);
+-        mapView = (MapView) findViewById(R.id.mapView);
++        mapView = findViewById(R.id.mapView);
+         button = findViewById(R.id.startButton);
++
++        // send safe message button
++        sendSafeMsg = findViewById(R.id.send_safe_message);
++
+         placeView = findViewById(R.id.placeView);
+         back = findViewById(R.id.go);
+         coordView = findViewById(R.id.coordView);
+@@ -128,7 +129,7 @@
+                             destinationPosition = firstResultPoint;
+                             destinationCoord = new LatLng(firstResultPoint.latitude(), firstResultPoint.longitude());
+ 
+-                            destinationMarker = mapboxMap.addMarker(new MarkerOptions()
++                            mapboxMap.addMarker(new MarkerOptions()
+                                     .position(destinationCoord)
+                             );
+ 
+@@ -139,21 +140,31 @@
+ 
+                             animateCameraToNewPosition(destinationCoord);
+ 
+-                            button.setOnClickListener(new View.OnClickListener() {
+-                                public void onClick(View v) {
+-                                    boolean simulateRoute = true;
+-                                    NavigationLauncherOptions options = NavigationLauncherOptions.builder()
+-                                            .directionsRoute(currentRoute)
+-                                            .shouldSimulateRoute(simulateRoute)
+-                                            .build();
+-                                    // Call this method with Context from within an Activity
+-                                    NavigationLauncher.startNavigation(SelfNavActivity.this, options);
+-                                }
++                            button.setOnClickListener(v -> {
++                                boolean simulateRoute = true;
++                                NavigationLauncherOptions options = NavigationLauncherOptions.builder()
++                                        .directionsRoute(currentRoute)
++                                        .shouldSimulateRoute(simulateRoute)
++                                        .build();
++                                // Call this method with Context from within an Activity
++                                // TODO: ADD EXTRA ACTIVITIES HERE --- ASK FOR HELP
++                                NavigationLauncher.startNavigation(SelfNavActivity.this, options);
+                             });
+ 
+                             button.setEnabled(true);
+                             button.setBackgroundResource(R.color.mapboxBlue);
+ 
++                            sendSafeMsg.setOnClickListener(v -> {
++                                Intent selectContactIntent = new Intent(SelfNavActivity.this, SelectContactActivity.class);
++                                selectContactIntent.putExtra("selectContactTitle", "Send Safe Message to ...");
++                                selectContactIntent.putExtra("destination_lat", destinationCoord.getLatitude());
++                                selectContactIntent.putExtra("destination_lon", destinationCoord.getLongitude());
++                                startActivity(selectContactIntent);
++                            });
++                            sendSafeMsg.setEnabled(true);
++                            sendSafeMsg.setBackgroundResource(R.color.mapboxBlue);
++
++
+                             Log.d(TAG, "onResponse: " + firstResultPoint.toString());
+                         } else {
+                             // No result for your request were found.
+@@ -359,6 +370,4 @@
+         super.onSaveInstanceState(outState);
+         mapView.onSaveInstanceState(outState);
+     }
+-
+-
+ }
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/TrackingByGPS.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/TrackingByGPS.java	(date 1537109624632)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/TrackingByGPS.java	(date 1537109624632)
+@@ -0,0 +1,67 @@
++package com.example.vulpix.maphelper.controller.activity;
++
++import android.support.v4.app.ActivityCompat;
++import android.os.Bundle;
++import android.support.v4.content.ContextCompat;
++import android.content.Intent;
++import android.location.LocationManager;
++import android.Manifest;
++import android.content.pm.PackageManager;
++import android.support.v7.app.AppCompatActivity;
++import android.widget.Toast;
++
++public class TrackingByGPS extends AppCompatActivity {
++
++    private static final int PERMISSIONS_REQUEST = 100;
++
++    @Override
++    protected void onCreate(Bundle savedInstanceState) {
++        super.onCreate(savedInstanceState);
++
++        //Check whether GPS tracking is enabled//
++        LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
++        if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
++            finish();
++        }
++
++        //Check whether this app has access to the location permission//
++        int permission = ContextCompat.checkSelfPermission(this,
++                Manifest.permission.ACCESS_FINE_LOCATION);
++
++        //If the location permission has been granted, then start the TrackerService//
++        if (permission == PackageManager.PERMISSION_GRANTED) {
++            startTrackerService();
++        } else {
++
++            //If the app doesn’t currently have access to the user’s location, then request access//
++            ActivityCompat.requestPermissions(this,
++                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
++                    PERMISSIONS_REQUEST);
++        }
++    }
++
++    @Override
++    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[]
++            grantResults) {
++
++        //If the permission has been granted...//
++        if (requestCode == PERMISSIONS_REQUEST && grantResults.length == 1
++                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
++
++        //...then start the GPS tracking service//
++            startTrackerService();
++        } else {
++            //If the user denies the permission request, then display a toast with some more information//
++            Toast.makeText(this, "Please enable location services to allow GPS tracking", Toast.LENGTH_SHORT).show();
++        }
++    }
++
++    //Start the TrackerService//
++    private void startTrackerService() {
++        startActivity(new Intent(getApplicationContext(), TrackingOnFirebase.class));
++        //Notify the user that tracking has been enabled//
++        Toast.makeText(this, "GPS tracking enabled", Toast.LENGTH_SHORT).show();
++        finish();
++    }
++
++}
+\ No newline at end of file
+Index: mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/TrackingOnFirebase.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/TrackingOnFirebase.java	(date 1537102247487)
++++ mapHelper/app/src/main/java/com/example/vulpix/maphelper/controller/activity/TrackingOnFirebase.java	(date 1537102247487)
+@@ -0,0 +1,123 @@
++package com.example.vulpix.maphelper.controller.activity;
++
++import com.example.vulpix.maphelper.R;
++import com.google.firebase.auth.FirebaseAuth;
++import com.google.android.gms.location.FusedLocationProviderClient;
++import com.google.android.gms.location.LocationCallback;
++import com.google.android.gms.location.LocationRequest;
++import com.google.android.gms.location.LocationResult;
++import com.google.android.gms.location.LocationServices;
++
++import com.google.firebase.auth.FirebaseUser;
++import com.google.firebase.database.DataSnapshot;
++import com.google.firebase.database.DatabaseError;
++import com.google.firebase.database.DatabaseReference;
++import com.google.firebase.database.FirebaseDatabase;
++import com.google.firebase.database.ValueEventListener;
++
++import android.os.Bundle;
++import android.support.annotation.NonNull;
++import android.support.v4.content.ContextCompat;
++import java.text.DateFormat;
++
++import android.support.v7.app.AppCompatActivity;
++import android.Manifest;
++import android.location.Location;
++import android.content.pm.PackageManager;
++import android.widget.TextView;
++
++import java.util.Date;
++
++public class TrackingOnFirebase extends AppCompatActivity {
++
++    // Firebase variables
++    private FirebaseAuth mFirebaseAuth;
++    private FirebaseUser mFirebaseUser;
++    private DatabaseReference mFirebaseDatabaseReference;
++    private String mUsername;
++    public static final String LOCATION_CHILD = "location";
++
++    // TODO: FOR TEST, DELETE IN FINAL VERSION
++    TextView coord;
++
++    @Override
++    public void onCreate(Bundle savedInstanceState) {
++        super.onCreate(savedInstanceState);
++
++        // TODO: FOR TEST, DELETE IN FINAL VERSION
++        setContentView(R.layout.activity_route);
++        coord = findViewById(R.id.coord);
++
++        loginToFirebase();
++    }
++
++    private void loginToFirebase() {
++
++        // initialize Firebase variables
++        mFirebaseAuth = FirebaseAuth.getInstance();
++        mFirebaseUser = mFirebaseAuth.getCurrentUser();
++        assert mFirebaseUser != null;
++        mUsername = mFirebaseUser.getDisplayName();
++        mFirebaseDatabaseReference = FirebaseDatabase.getInstance().getReference();
++
++        requestLocationUpdates();
++    }
++
++    //Initiate the request to track the device's location//
++    private void requestLocationUpdates() {
++        LocationRequest request = new LocationRequest();
++
++        //Specify how often your app should request the device’s location//
++        request.setInterval(10000);
++
++        //Get the most accurate location data available//
++        request.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
++        FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(this);
++
++        int permission = ContextCompat.checkSelfPermission(this,
++                Manifest.permission.ACCESS_FINE_LOCATION);
++
++        //If the app currently has access to the location permission...//
++        if (permission == PackageManager.PERMISSION_GRANTED) {
++
++            //...then request location updates//
++            client.requestLocationUpdates(request, new LocationCallback() {
++                @Override
++                public void onLocationResult(LocationResult locationResult) {
++
++                    //Get a reference to the database, so your app can perform read and write operations//
++                    Location location = locationResult.getLastLocation();
++
++                    // send location to firebase
++                    DatabaseReference locationRef = mFirebaseDatabaseReference.child(LOCATION_CHILD);
++
++                    // send location finish
++                    if (location != null) {
++
++                        // TODO: FOR TEST, DELETE IN FINAL VERSION
++                        String s = location.getLongitude() + ", " + location.getLatitude();
++                        coord.setText("Coord: " + s);
++
++                        locationRef.child(mUsername).child("Updates")
++                                .addValueEventListener(new ValueEventListener() {
++                                    @Override
++                                    public void onDataChange(DataSnapshot dataSnapshot) {
++                                        DateFormat df = DateFormat.getDateTimeInstance();
++                                        Date date = new Date();
++                                        locationRef.child(mUsername).child("Location")
++                                                .child("lat").setValue(location.getLatitude());
++                                        locationRef.child(mUsername).child("Location")
++                                                .child("lon").setValue(location.getLongitude());
++                                        locationRef.child(mUsername).child("Location")
++                                                .child("LastOnlineDate").setValue(df.format(date));
++                                    }
++                                    @Override
++                                    public void onCancelled(@NonNull DatabaseError databaseError) {
++                                    }
++                                });
++                    }
++                }
++            }, null);
++        }
++    }
++}
+\ No newline at end of file
+Index: mapHelper/app/src/main/res/layout/activity_ask_for_help.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/res/layout/activity_ask_for_help.xml	(date 1536586648000)
++++ mapHelper/app/src/main/res/layout/activity_ask_for_help.xml	(date 1536973220537)
+@@ -25,4 +25,14 @@
+         android:text="Start (Chatting)"
+         app:layout_constraintBottom_toBottomOf="parent"
+         app:layout_constraintEnd_toEndOf="parent" />
++
++    <Button
++        android:id="@+id/start_track"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginBottom="148dp"
++        android:layout_marginEnd="128dp"
++        android:text="START(TRACK)"
++        app:layout_constraintBottom_toBottomOf="parent"
++        app:layout_constraintEnd_toEndOf="parent" />
+ </android.support.constraint.ConstraintLayout>
+\ No newline at end of file
+Index: mapHelper/app/src/main/res/layout/activity_route.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/res/layout/activity_route.xml	(date 1537102247695)
++++ mapHelper/app/src/main/res/layout/activity_route.xml	(date 1537102247695)
+@@ -0,0 +1,19 @@
++<?xml version="1.0" encoding="utf-8"?>
++<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:app="http://schemas.android.com/apk/res-auto"
++    xmlns:tools="http://schemas.android.com/tools"
++    android:layout_width="match_parent"
++    android:layout_height="match_parent"
++    tools:context=".controller.activity.TrackingByGPS">
++
++    <TextView
++        android:id="@+id/coord"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_marginEnd="196dp"
++        android:layout_marginTop="72dp"
++        android:text="Coord: "
++        app:layout_constraintEnd_toEndOf="parent"
++        app:layout_constraintTop_toTopOf="parent" />
++
++</android.support.constraint.ConstraintLayout>
+\ No newline at end of file
+Index: mapHelper/app/src/main/res/layout/activity_self_nav.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/res/layout/activity_self_nav.xml	(date 1536586648000)
++++ mapHelper/app/src/main/res/layout/activity_self_nav.xml	(date 1537175270784)
+@@ -18,17 +18,6 @@
+ 
+     </com.mapbox.mapboxsdk.maps.MapView>
+ 
+-    <Button
+-        android:id="@+id/startButton"
+-        android:layout_height="wrap_content"
+-        android:layout_width="fill_parent"
+-        android:padding="5px"
+-        android:layout_margin="20px"
+-        android:text="Start navigation"
+-        android:background="@color/mapboxGrayLight"
+-        android:textColor="@color/mapboxWhite"
+-        android:enabled="false"/>
+-
+     <Button
+         android:id="@+id/go"
+         android:layout_width="45dp"
+@@ -58,4 +47,27 @@
+         android:layout_marginTop="142dp"
+         android:text="Coords" />
+ 
++    <Button
++        android:id="@+id/startButton"
++        android:layout_width="fill_parent"
++        android:layout_height="wrap_content"
++        android:layout_alignParentBottom="true"
++        android:layout_alignParentStart="true"
++        android:background="@color/mapboxGrayLight"
++        android:enabled="false"
++        android:padding="5px"
++        android:text="Start navigation"
++        android:textColor="@color/mapboxWhite" />
++
++    <Button
++        android:id="@+id/send_safe_message"
++        android:layout_width="wrap_content"
++        android:layout_height="wrap_content"
++        android:layout_alignParentBottom="true"
++        android:layout_alignParentStart="true"
++        android:layout_marginBottom="65dp"
++        android:layout_marginStart="19dp"
++        android:background="@color/mapboxGrayLight"
++        android:text="Send Safe Message" />
++
+ </RelativeLayout>
+\ No newline at end of file
+Index: mapHelper/app/src/main/res/layout/item_message.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/res/layout/item_message.xml	(date 1536586648000)
++++ mapHelper/app/src/main/res/layout/item_message.xml	(date 1537013178051)
+@@ -16,8 +16,9 @@
+             android:layout_height="36dp"
+             android:src="@drawable/ic_account_circle_black_36dp"/>
+ 
++
+         <LinearLayout
+-            android:layout_width="match_parent"
++            android:layout_width="250dp"
+             android:layout_height="wrap_content"
+             android:layout_marginLeft="10dp"
+             android:gravity="center_vertical"
+@@ -28,15 +29,8 @@
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+                 android:layout_weight="0"
+-                android:textAppearance="?android:attr/textAppearanceLarge"/>
++                android:textAppearance="?android:attr/textAppearanceLarge" />
+ 
+-            <!--<ImageView-->
+-                <!--android:id="@+id/messageImageView"-->
+-                <!--android:layout_width="match_parent"-->
+-                <!--android:layout_height="wrap_content"-->
+-                <!--android:adjustViewBounds="true"-->
+-                <!--android:background="@color/colorPrimary"-->
+-                <!--android:scaleType="fitCenter"/>-->
+             <com.facebook.drawee.view.SimpleDraweeView
+                 android:id="@+id/messageImageView"
+                 android:layout_width="223dp"
+@@ -50,9 +44,16 @@
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+                 android:layout_weight="0"
+-                android:textAppearance="?android:attr/textAppearanceSmall"/>
++                android:textAppearance="?android:attr/textAppearanceSmall" />
+         </LinearLayout>
+ 
++        <Button
++            android:id="@+id/trackMessenger"
++            android:layout_width="wrap_content"
++            android:layout_height="wrap_content"
++            android:layout_weight="1"
++            android:text="Track" />
++
+     </LinearLayout>
+ 
+ 
+Index: mapHelper/app/src/main/res/menu/send_location_menu.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/res/menu/send_location_menu.xml	(date 1536586648000)
++++ mapHelper/app/src/main/res/menu/send_location_menu.xml	(date 1537116740556)
+@@ -1,5 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+-<menu xmlns:android="http://schemas.android.com/apk/res/android"
++<menu
++    xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:app="http://schemas.android.com/apk/res-auto">
+     <item
+         android:id="@+id/destination_search"
+Index: mapHelper/app/src/main/res/menu/main_menu.xml
+===================================================================
+--- mapHelper/app/src/main/res/menu/main_menu.xml	(date 1536586648000)
++++ mapHelper/app/src/main/res/menu/top_menu.xml	(date 1536516741229)
+@@ -1,0 +1,0 @@
+Index: mapHelper/app/src/main/res/values/colors.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/res/values/colors.xml	(date 1536586648000)
++++ mapHelper/app/src/main/res/values/colors.xml	(date 1537202971269)
+@@ -6,4 +6,18 @@
+     <color name="mapboxWhite">#ffffff</color>
+     <color name="mapboxBlue">#4264fb</color>
+     <color name="mapboxGrayLight">#c6d2e1</color>
++    <color name="main_bg">#EEFFEE</color>
++    <color name="transparent">#00000000</color>
++    <color name="lucency_white">#00ffffff</color>
++    <color name="lucency_black">#00000000</color>
++    <color name="half_lucency_black">#88000000</color>
++    <color name="white">#ffffffff</color>
++    <color name="black">#ff000000</color>
++    <color name="hint">#ff999999</color>
++    <color name="grey">#ff666666</color>
++    <color name="blue">#ff2e94da</color>
++    <color name="red">#ffa22a22</color>
++    <color name="tab_text_selected">#ff0084e8</color>
++    <color name="tab_text_normal">#ff7597b3</color>
++    <color name="bg_color">#F4F3F3</color>
+ </resources>
+Index: mapHelper/app/src/main/res/values/strings.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/res/values/strings.xml	(date 1536586648000)
++++ mapHelper/app/src/main/res/values/strings.xml	(date 1537184695702)
+@@ -2,12 +2,29 @@
+     <string name="app_name">mapHelper</string>
+     <string name="title_activity_maps">Map</string>
+ 
+-    // Mapbox
++    <!--Mapbox-->
+     <string name="access_token" translatable="false">pk.eyJ1Ijoic2t5MTk5NTQ5MjYiLCJhIjoiY2psczE4NXA2MGI2bzNwanJhamtxb2RlZSJ9.Ib7V8KglAlaHBVBZT_4HoA</string>
+ 
+-    // main_menu
++    <!--main_menu-->
+     <string name="sign_out">Sign Out</string>
+     <string name="fresh_config">Fresh Config</string>
+     <string name="invite_menu_label">Invite</string>
++    <string name="draw_custom_marker_options_title">Cape Town Harbour</string>
++    <string name="draw_custom_marker_options_snippet">One of the busiest ports in South Africa</string>
++
++    <!-- TODO: Remove or change this placeholder text -->
++    <string name="hello_blank_fragment">Hello blank fragment</string>
++
++    <!--bottom tabs-->
++    <string name="menu_main">Main</string>
++    <string name="menu_message">Message</string>
++    <string name="menu_contacts">Contacts</string>
++    <string name="menu_account">Account</string>
++
++    <!--firebase child-->
++    <string name="USER_CHILD">users</string>
++    <string name="LOCATION_CHILD">location</string>
++    <string name="MESSAGE_CHILD">messages</string>
++
+ 
+ </resources>
+Index: mapHelper/app/src/main/res/values/styles.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/res/values/styles.xml	(date 1536586648000)
++++ mapHelper/app/src/main/res/values/styles.xml	(date 1537118824887)
+@@ -7,5 +7,18 @@
+         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+         <item name="colorAccent">@color/colorAccent</item>
+     </style>
++    <style name="obj_tabbar">
++        <item name="android:layout_width">wrap_content</item>
++        <item name="android:layout_height">wrap_content</item>
++    </style>
++    <style name="txt_tabbar" parent="@style/obj_tabbar">
++        <item name="android:textSize">10.0dip</item>
++        <item name="android:textStyle">normal</item>
++        <item name="android:textColor">@color/grey</item>
++        <item name="android:gravity">center</item>
++        <item name="android:paddingLeft">4.0dip</item>
++        <item name="android:paddingRight">4.0dip</item>
++        <item name="android:layout_height">15.0dip</item>
++    </style>
+ 
+ </resources>
+Index: mapHelper/app/src/main/AndroidManifest.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/src/main/AndroidManifest.xml	(date 1536586648000)
++++ mapHelper/app/src/main/AndroidManifest.xml	(date 1537246086223)
+@@ -21,7 +21,6 @@
+         <activity android:name=".controller.activity.MainActivity">
+             <intent-filter>
+                 <action android:name="android.intent.action.MAIN" />
+-
+                 <category android:name="android.intent.category.LAUNCHER" />
+             </intent-filter>
+         </activity>
+@@ -29,7 +28,12 @@
+         <activity android:name=".controller.activity.ChatActivity" />
+         <activity android:name=".controller.activity.NavActivity" />
+         <activity android:name=".controller.activity.AskForHelp" />
+-        <activity android:name=".controller.activity.SelfNavActivity"></activity>
++        <activity android:name=".controller.activity.SelfNavActivity" />
++        <activity android:name=".controller.activity.TrackingByGPS" />
++        <activity android:name=".controller.activity.TrackingOnFirebase" />
++        <activity android:name=".controller.activity.TrackActivity" />
++        <activity android:name=".controller.activity.SelectContactActivity" />
++
+     </application>
+ 
+ </manifest>
+\ No newline at end of file
+Index: mapHelper/app/build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/app/build.gradle	(date 1536586648000)
++++ mapHelper/app/build.gradle	(date 1537006017129)
+@@ -47,6 +47,7 @@
+ 
+     // Google
+     implementation 'com.google.android.gms:play-services-auth:16.0.0'
++    implementation 'com.google.android.gms:play-services-location:15.0.1'
+ 
+     // facebook image view
+     implementation 'com.facebook.fresco:fresco:0.8.1'
+Index: mapHelper/.idea/vcs.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/.idea/vcs.xml	(date 1537237368922)
++++ mapHelper/.idea/vcs.xml	(date 1537237368922)
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<project version="4">
++  <component name="VcsDirectoryMappings">
++    <mapping directory="$PROJECT_DIR$/.." vcs="Git" />
++  </component>
++</project>
+\ No newline at end of file
+Index: mapHelper/build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- mapHelper/build.gradle	(date 1536586648000)
++++ mapHelper/build.gradle	(date 1537208055759)
+@@ -9,8 +9,8 @@
+         maven { url 'https://maven.fabric.io/public'  }
+     }
+     dependencies {
+-        classpath 'com.android.tools.build:gradle:3.1.2'
+-        classpath 'com.google.gms:google-services:4.0.2'
++        classpath 'com.android.tools.build:gradle:3.1.4'
++        classpath 'com.google.gms:google-services:4.1.0'
+         classpath 'io.fabric.tools:gradle:1.24.4'
+ 
+         // NOTE: Do not place your application dependencies here; they belong
+diff --git mapHelper/.idea/caches/build_file_checksums.ser mapHelper/.idea/caches/build_file_checksums.ser
+index c6ea528a524f158238ad05e0b6ae9fffd889799a..70d4bffda72573085c5639049b9fb2071b28cb52
+GIT binary patch
+literal 537
+zc${1FmVvdnh`~NNKUXg?FQq6yGexf?KR>5fFEb@IQ7^qHF(oHeub?PDD>b=9F91S2
+zm1gFoxMk*~I%lLNXBU^|7Q2L-Ts|(GuF1r}<i#MFTj`TnT;dMa8(f)}9Fm!vT3nKt
+zTj0aMpIeEdv4nx&Co8cmQNOe#Ge_SyvB0{bfPsNA^;PwPDxkXrL2`N^IX#cW;tZfX
+zEBmd3hs6>uGBYr_F>vMNC#JY1CYR(Fc`|U8WE7<qXXNLkR20}dFn|D0IR}sw0AjWh
+z27$zaf|w+b)1lrfEn;Abc3SgU{0AFH$O9$@29VVZ0>3XwY*=ybfoS!iiBGm@9(oLP
+zVsUCoNoHPpF-&72LmdMfNbS6v3HxmBv*+n1=t+e;9bQ<%py6y46Iz^FR2);8nVgXt
+z1Jx3P2+4xfqLR$iVuT@AWP5J*Gi+jc*}ysD%@3!#5(XX=XTlW*OUB*Q|K#-`_XA_W
+zlb&l!fPTu!PfpCiYAVC-bHAS+W_!#2SmMLAYRLyB41##v@VS?H)t-c<ew%F5jGvtq
+HNU8t;3&X({
+
